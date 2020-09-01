@@ -3,10 +3,12 @@ from django.conf.urls import url
 from django.contrib import admin, messages
 from django.contrib.admin import ModelAdmin
 from django.db.models import Q
+from django import forms
 from django.template.response import TemplateResponse
 from django.templatetags.static import static
 from django.urls import reverse
 from django.utils.translation import ugettext_lazy as _
+from flat_json_widget.widgets import FlatJsonWidget
 
 from openwisp_users.multitenancy import (
     MultitenantAdminMixin,
@@ -226,6 +228,11 @@ class TopologyAdmin(
         return TemplateResponse(request, 'admin/topology/visualize.html', context)
 
 
+class UserPropertiesForm(forms.ModelForm):
+    class Meta:
+        widgets = {'user_properties': FlatJsonWidget}
+
+
 class NodeLinkMixin(MultitenantAdminMixin):
     """
     Hides organization in add form
@@ -234,7 +241,7 @@ class NodeLinkMixin(MultitenantAdminMixin):
     other extensions to override the admin queryset
     """
 
-    readonly_fields = ['organization']
+    readonly_fields = ['organization', 'gotten_properties']
 
     def get_fields(self, request, obj):
         fields = super().get_fields(request, obj)
@@ -247,10 +254,16 @@ class NodeLinkMixin(MultitenantAdminMixin):
     def get_queryset(self, request):
         return self.model.get_queryset(super().get_queryset(request))
 
+    def gotten_properties(self, obj):
+        return list(obj.properties.items())
+
+    gotten_properties.short_description = _('properties')
+
 
 @admin.register(Node)
 class NodeAdmin(NodeLinkMixin, BaseAdmin):
     model = Node
+    form = UserPropertiesForm
     change_form_template = 'admin/topology/node/change_form.html'
     list_display = ['get_name', 'organization', 'topology', 'addresses']
     search_fields = ['addresses', 'label', 'properties']
@@ -264,7 +277,8 @@ class NodeAdmin(NodeLinkMixin, BaseAdmin):
         'organization',
         'label',
         'addresses',
-        'properties',
+        'gotten_properties',
+        'user_properties',
         'created',
         'modified',
     ]
@@ -287,6 +301,7 @@ class NodeAdmin(NodeLinkMixin, BaseAdmin):
 @admin.register(Link)
 class LinkAdmin(NodeLinkMixin, BaseAdmin):
     model = Link
+    form = UserPropertiesForm
     raw_id_fields = ['source', 'target']
     search_fields = [
         'source__label',
@@ -317,7 +332,8 @@ class LinkAdmin(NodeLinkMixin, BaseAdmin):
         'target',
         'cost',
         'cost_text',
-        'properties',
+        'gotten_properties',
+        'user_properties',
         'created',
         'modified',
     ]
